@@ -1,2 +1,2 @@
 # dangernoodle
-snake game clone built by claude
+Snake Game Clone
