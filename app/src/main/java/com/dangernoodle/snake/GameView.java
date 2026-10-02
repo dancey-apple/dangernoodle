@@ -2,6 +2,7 @@ package com.dangernoodle.snake;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.Rect;
@@ -17,26 +18,16 @@ import java.util.Locale;
 
 /** Single custom view that draws every screen (menu, game, name entry, scores) and handles input. */
 public final class GameView extends View {
-    static final int BG = 0xFFC7F0D8;
-    static final int INK = 0xFF43523D;
-
     private static final int S_MENU = 0, S_PLAYING = 1, S_PAUSED = 2, S_DYING = 3,
             S_OVER = 4, S_NAME = 5, S_SCORES = 6;
-    private static final int M_PLAY = 0, M_LEVEL = 1, M_WALLS = 2, M_SOUND = 3, M_SCORES = 4;
+    private static final int M_PLAY = 0, M_LEVEL = 1, M_WALLS = 2, M_SOUND = 3, M_THEME = 4, M_SCORES = 5;
+    private static final int MENU_ITEMS = 6;
     private static final int COLS = 20;
     private static final int MIN_LEVEL = 1, MAX_LEVEL = 9;
     private static final long OVER_TAP_DELAY_MS = 600;
 
-    private static final String[] BUG = {
-        "#......#",
-        ".######.",
-        "##.##.##",
-        ".######.",
-        ".#....#.",
-    };
-
-    private final Paint ink = new Paint();
-    private final Paint paper = new Paint();
+    private final Paint fill = new Paint();
+    private final Paint pixelPaint = new Paint();
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final SharedPreferences prefs;
     private final HighScores scores;
@@ -48,6 +39,9 @@ public final class GameView extends View {
     private int level;
     private boolean walls;
     private boolean soundOn;
+    private int themeIndex;
+    private Theme theme;
+    private Bitmap backdrop;
 
     private boolean blinkHidden;
     private int blinks;
@@ -67,7 +61,7 @@ public final class GameView extends View {
     private int cell, fieldX, fieldY, fieldRows, hudTop;
 
     // Hit areas, filled in while drawing.
-    private final Rect[] menuRects = new Rect[5];
+    private final Rect[] menuRects = new Rect[MENU_ITEMS];
     private final Rect[] letterRects = new Rect[3];
     private final Rect saveRect = new Rect();
     private final Rect backRect = new Rect();
@@ -81,14 +75,14 @@ public final class GameView extends View {
         level = Math.max(MIN_LEVEL, Math.min(MAX_LEVEL, prefs.getInt("level", 5)));
         walls = prefs.getBoolean("walls", true);
         soundOn = prefs.getBoolean("sound", true);
+        themeIndex = Math.max(0, Math.min(Theme.ALL.length - 1, prefs.getInt("theme", 0)));
+        theme = Theme.ALL[themeIndex];
         String saved = HighScores.sanitize(prefs.getString("initials", "AAA"));
         for (int i = 0; i < 3; i++) initials[i] = saved.charAt(i);
         for (int i = 0; i < menuRects.length; i++) menuRects[i] = new Rect();
         for (int i = 0; i < letterRects.length; i++) letterRects[i] = new Rect();
-        ink.setColor(INK);
-        ink.setStyle(Paint.Style.FILL);
-        paper.setColor(BG);
-        paper.setStyle(Paint.Style.FILL);
+        fill.setStyle(Paint.Style.FILL);
+        pixelPaint.setFilterBitmap(false);
         swipeThreshold = 22 * context.getResources().getDisplayMetrics().density;
         setHapticFeedbackEnabled(true);
     }
@@ -103,6 +97,11 @@ public final class GameView extends View {
     void release() {
         handler.removeCallbacksAndMessages(null);
         sound.release();
+    }
+
+    /** Background colour for the window behind this view. */
+    int backgroundColor() {
+        return theme.bgBottom;
     }
 
     /** Returns true if the back press was consumed. */
@@ -183,6 +182,15 @@ public final class GameView extends View {
         game = null;
         confirmClear = false;
         state = S_SCORES;
+        invalidate();
+    }
+
+    private void setTheme(int index) {
+        themeIndex = (index + Theme.ALL.length) % Theme.ALL.length;
+        theme = Theme.ALL[themeIndex];
+        prefs.edit().putInt("theme", themeIndex).apply();
+        backdrop = null;
+        getRootView().setBackgroundColor(theme.bgBottom);
         invalidate();
     }
 
@@ -354,12 +362,13 @@ public final class GameView extends View {
 
     private void onMenuItem(int item, int x) {
         click();
+        boolean left = x < menuRects[item].centerX();
         switch (item) {
             case M_PLAY:
                 startGame();
                 return;
             case M_LEVEL:
-                changeLevel(x < menuRects[M_LEVEL].centerX() ? -1 : 1);
+                changeLevel(left ? -1 : 1);
                 return;
             case M_WALLS:
                 walls = !walls;
@@ -368,6 +377,9 @@ public final class GameView extends View {
             case M_SOUND:
                 soundOn = !soundOn;
                 prefs.edit().putBoolean("sound", soundOn).apply();
+                break;
+            case M_THEME:
+                setTheme(themeIndex + (left ? -1 : 1));
                 break;
             case M_SCORES:
                 highlightRank = -1;
@@ -403,8 +415,10 @@ public final class GameView extends View {
 
     @Override
     protected void onSizeChanged(int w, int h, int oldw, int oldh) {
-        u = Math.max(2, w / 120);
+        // One UI "pixel". Bounded by both dimensions so menus fit on wide and square screens too.
+        u = Math.max(2, Math.min(w / 120, h / 220));
         frame = Math.max(2, u / 2);
+        backdrop = null;
         if (game != null) layoutField(game.cols, game.rows);
         else layoutField(COLS, 0);
     }
@@ -435,15 +449,17 @@ public final class GameView extends View {
 
     @Override
     protected void onDraw(Canvas c) {
-        c.drawColor(BG);
+        drawBackdrop(c);
         switch (state) {
             case S_MENU:
                 drawMenu(c);
                 break;
             case S_NAME:
+                dimBackdrop(c);
                 drawNameEntry(c);
                 break;
             case S_SCORES:
+                dimBackdrop(c);
                 drawScores(c);
                 break;
             default:
@@ -458,226 +474,367 @@ public final class GameView extends View {
         }
     }
 
+    private void drawBackdrop(Canvas c) {
+        int w = getWidth(), h = getHeight();
+        if (theme.decor == Theme.DECOR_NONE && theme.bgTop == theme.bgBottom) {
+            c.drawColor(theme.bgTop);
+            return;
+        }
+        if (backdrop == null) backdrop = Backdrop.render(theme, w, h, Math.max(1, u / 2));
+        int pixel = Math.max(1, u / 2);
+        tmp.set(0, 0, backdrop.getWidth() * pixel, backdrop.getHeight() * pixel);
+        c.drawBitmap(backdrop, null, tmp, pixelPaint);
+    }
+
+    /** Calms the backdrop behind text-heavy screens. */
+    private void dimBackdrop(Canvas c) {
+        if (theme.fieldTint == 0) return;
+        fill.setColor(theme.fieldTint);
+        c.drawRect(0, 0, getWidth(), getHeight(), fill);
+    }
+
+    // ---- text helpers (theme ink plus optional offset shadow)
+
+    private void text(Canvas c, String s, float x, float y, int px) {
+        if (theme.shadow != 0) {
+            fill.setColor(theme.shadow);
+            int o = Math.max(1, px / 2);
+            PixelFont.draw(c, s, x + o, y + o, px, fill);
+        }
+        fill.setColor(theme.ink);
+        PixelFont.draw(c, s, x, y, px, fill);
+    }
+
+    private void textCentered(Canvas c, String s, float cx, float y, int px) {
+        text(c, s, Math.round(cx - PixelFont.width(s, px) / 2f), y, px);
+    }
+
+    private void plainCentered(Canvas c, String s, float cx, float y, int px, int color) {
+        fill.setColor(color);
+        PixelFont.drawCentered(c, s, cx, y, px, fill);
+    }
+
+    // ---- menu
+
     private void drawMenu(Canvas c) {
         int w = getWidth(), h = getHeight();
-        int y = h / 10;
-
-        int titlePx = PixelFont.fit("SNAKE", w * 7 / 10, 8 * u);
-        PixelFont.drawCentered(c, "SNAKE", w / 2f, y, titlePx, ink);
-        y += PixelFont.height(titlePx) + 3 * u;
-
-        PixelFont.drawCentered(c, "DANGER NOODLE", w / 2f, y, u, ink);
-        y += PixelFont.height(u) + 5 * u;
-
-        drawMenuSnake(c, w / 2, y, 4 * u);
-        y += 2 * (4 * u) + 6 * u;
-
-        List<HighScores.Entry> top = scores.entries();
-        String best = "BEST " + (top.isEmpty() ? "-" : String.valueOf(top.get(0).score));
-        PixelFont.drawCentered(c, best, w / 2f, y, u, ink);
-        y += PixelFont.height(u) + 6 * u;
-
         String[] labels = {
             "PLAY",
             "< LEVEL " + level + " >",
             "WALLS " + (walls ? "ON" : "OFF"),
             "SOUND " + (soundOn ? "ON" : "OFF"),
+            "< " + theme.name + " >",
             "HIGH SCORES",
         };
-        int px = PixelFont.fit("< LEVEL 9 >", w * 6 / 10, 2 * u);
-        int boxW = w * 8 / 10;
-        int boxH = PixelFont.height(px) + 4 * px;
-        int gap = 2 * px;
-        int footerH = 2 * PixelFont.height(u) + 10 * u;
-        int needed = labels.length * boxH + (labels.length - 1) * gap;
-        y = Math.max(y, Math.min(y + (h - footerH - y - needed) / 2, h - footerH - needed));
-        for (int i = 0; i < labels.length; i++) {
+
+        // Header: title, subtitle, a little snake, best score.
+        int titlePx = PixelFont.fit("SNAKE", w * 7 / 10, 6 * u);
+        int snakeCell = 3 * u;
+        int headerH = PixelFont.height(titlePx) + 3 * u + PixelFont.height(u) + 4 * u
+                + 2 * snakeCell + 4 * u + PixelFont.height(u);
+        int footerH = 2 * PixelFont.height(u) + 2 * u;
+        int margin = 4 * u;
+
+        // Buttons get whatever height is left, up to 2u per font pixel.
+        int boxW = Math.min(w * 8 / 10, 110 * u);
+        String widest = "< " + "VAPORWAVE" + " >";
+        int px = PixelFont.fit(widest, boxW - 4 * u, 2 * u);
+        int availForItems = h - 2 * margin - headerH - footerH - 8 * u;
+        // Each item is 10 px tall plus a 1.5 px gap.
+        px = Math.max(1, Math.min(px, availForItems * 2 / (MENU_ITEMS * 23 - 3)));
+        int boxH = 10 * px;
+        int gap = 3 * px / 2;
+        int itemsH = MENU_ITEMS * boxH + (MENU_ITEMS - 1) * gap;
+
+        int free = Math.max(0, h - 2 * margin - headerH - itemsH - footerH);
+        int y = margin + free / 4;
+        textCentered(c, "SNAKE", w / 2f, y, titlePx);
+        y += PixelFont.height(titlePx) + 3 * u;
+        textCentered(c, "DANGER NOODLE", w / 2f, y, u);
+        y += PixelFont.height(u) + 4 * u;
+        drawMenuSnake(c, w / 2, y, snakeCell);
+        y += 2 * snakeCell + 4 * u;
+        List<HighScores.Entry> top = scores.entries();
+        textCentered(c, "BEST " + (top.isEmpty() ? "-" : String.valueOf(top.get(0).score)), w / 2f, y, u);
+        y += PixelFont.height(u) + free / 2 + 4 * u;
+
+        for (int i = 0; i < MENU_ITEMS; i++) {
             Rect r = menuRects[i];
             r.set((w - boxW) / 2, y, (w + boxW) / 2, y + boxH);
             drawButton(c, r, labels[i], px, i == M_PLAY);
             y += boxH + gap;
         }
 
-        int fy = h - footerH + 2 * u;
-        PixelFont.drawCentered(c, "SWIPE TO STEER", w / 2f, fy, u, ink);
-        PixelFont.drawCentered(c, "TAP TO PAUSE", w / 2f, fy + PixelFont.height(u) + 2 * u, u, ink);
+        int fy = h - margin - footerH;
+        textCentered(c, "SWIPE TO STEER", w / 2f, fy, u);
+        textCentered(c, "TAP TO PAUSE", w / 2f, fy + PixelFont.height(u) + 2 * u, u);
     }
 
-    /** A little wavy snake chasing a food pellet, centred on cx. */
+    /** A little wavy snake chasing a food pellet, centred on cx, drawn in the current theme. */
     private void drawMenuSnake(Canvas c, int cx, int top, int s) {
         int[][] segs = {{0, 1}, {1, 1}, {2, 1}, {2, 0}, {3, 0}, {4, 0}, {5, 0}, {5, 1}, {6, 1}, {7, 1}, {8, 1}};
-        int width = 11 * s;
-        int left = cx - width / 2;
-        int g = Math.max(1, s / 8);
-        for (int[] p : segs) {
+        int left = cx - 11 * s / 2;
+        int n = segs.length;
+        for (int i = 0; i < n; i++) {
+            int[] p = segs[i];
             int x = left + p[0] * s, y = top + p[1] * s;
-            c.drawRect(x + g, y + g, x + s - g, y + s - g, ink);
+            int fromHead = n - 1 - i;
+            if (fromHead == 0) {
+                drawHead(c, x, y, s, SnakeGame.RIGHT);
+            } else {
+                int[] towardHead = segs[i + 1];
+                drawBody(c, x, y, s, fromHead, towardHead[1] == p[1]);
+            }
         }
-        drawFood(c, left + 10 * s, top + s, s);
+        drawSprite(c, theme.food, left + 10 * s, top + s, s, s, 0, false);
     }
+
+    // ---- game
 
     private void drawGame(Canvas c) {
         if (game == null) return;
         if (game.rows != fieldRows || cell == 0) layoutField(game.cols, game.rows);
         int fieldW = game.cols * cell, fieldH = game.rows * cell;
 
-        // HUD: score on the left, bonus critter countdown on the right.
-        PixelFont.draw(c, String.format(Locale.US, "%04d", game.score), fieldX - 2 * frame, hudTop, u, ink);
+        if (theme.fieldTint != 0) {
+            fill.setColor(theme.fieldTint);
+            c.drawRect(fieldX - 2 * frame, fieldY - 2 * frame, fieldX + fieldW + 2 * frame,
+                    fieldY + fieldH + 2 * frame, fill);
+        }
+
+        // HUD: score on the left, bonus countdown on the right.
+        text(c, String.format(Locale.US, "%04d", game.score), fieldX - 2 * frame, hudTop, u);
         if (game.bonus >= 0) {
             String t = String.format(Locale.US, "%02d", game.bonusTicks);
             int tw = PixelFont.width(t, u);
             int right = fieldX + fieldW + 2 * frame;
-            PixelFont.draw(c, t, right - tw, hudTop, u, ink);
-            int sub = Math.max(1, PixelFont.height(u) / 5);
-            drawSprite(c, BUG, right - tw - 2 * u - 8 * sub, hudTop + (PixelFont.height(u) - 5 * sub) / 2, sub);
+            text(c, t, right - tw, hudTop, u);
+            int iconH = PixelFont.height(u), iconW = 2 * iconH;
+            drawSprite(c, theme.bonus, right - tw - 2 * u - iconW, hudTop, iconW, iconH, 0, false);
         }
 
         drawFrame(c, fieldX - 2 * frame, fieldY - 2 * frame,
                 fieldX + fieldW + 2 * frame, fieldY + fieldH + 2 * frame);
 
+        int g = Math.max(1, cell / 10);
         if (game.food >= 0) {
-            drawFood(c, fieldX + (game.food % game.cols) * cell, fieldY + (game.food / game.cols) * cell, cell);
+            int fx = fieldX + (game.food % game.cols) * cell, fy = fieldY + (game.food / game.cols) * cell;
+            drawSprite(c, theme.food, fx + g, fy + g, cell - 2 * g, cell - 2 * g, 0, false);
         }
         if (game.bonus >= 0) {
             int bx = fieldX + (game.bonus % game.cols) * cell, by = fieldY + (game.bonus / game.cols) * cell;
-            int sub = Math.max(1, Math.min(2 * cell / 9, cell * 4 / 25));
-            drawSprite(c, BUG, bx + (2 * cell - 8 * sub) / 2, by + (cell - 5 * sub) / 2, sub);
+            drawSprite(c, theme.bonus, bx + g, by + g, 2 * cell - 2 * g, cell - 2 * g, 0, false);
         }
         if (!blinkHidden) drawSnake(c);
     }
 
     private void drawFrame(Canvas c, int l, int t, int r, int b) {
+        fill.setColor(theme.frame);
         if (walls) {
-            c.drawRect(l, t, r, t + frame, ink);
-            c.drawRect(l, b - frame, r, b, ink);
-            c.drawRect(l, t, l + frame, b, ink);
-            c.drawRect(r - frame, t, r, b, ink);
+            c.drawRect(l, t, r, t + frame, fill);
+            c.drawRect(l, b - frame, r, b, fill);
+            c.drawRect(l, t, l + frame, b, fill);
+            c.drawRect(r - frame, t, r, b, fill);
             return;
         }
         // Dashed border means the edges wrap around.
         int dash = Math.max(frame, cell / 2);
         for (int x = l; x < r; x += 2 * dash) {
             int e = Math.min(r, x + dash);
-            c.drawRect(x, t, e, t + frame, ink);
-            c.drawRect(x, b - frame, e, b, ink);
+            c.drawRect(x, t, e, t + frame, fill);
+            c.drawRect(x, b - frame, e, b, fill);
         }
         for (int y = t; y < b; y += 2 * dash) {
             int e = Math.min(b, y + dash);
-            c.drawRect(l, y, l + frame, e, ink);
-            c.drawRect(r - frame, y, r, e, ink);
+            c.drawRect(l, y, l + frame, e, fill);
+            c.drawRect(r - frame, y, r, e, fill);
         }
     }
 
     private void drawSnake(Canvas c) {
-        int g = Math.max(1, cell / 8);
         int n = game.length();
-        for (int i = 0; i < n; i++) {
+        int cols = game.cols;
+        // Tail first so the head is drawn on top of any glow.
+        for (int i = n - 1; i >= 0; i--) {
             int s = game.segment(i);
-            int x = fieldX + (s % game.cols) * cell, y = fieldY + (s / game.cols) * cell;
-            c.drawRect(x + g, y + g, x + cell - g, y + cell - g, ink);
+            int x = fieldX + (s % cols) * cell, y = fieldY + (s / cols) * cell;
+            if (i == 0) {
+                drawHead(c, x, y, cell, game.direction());
+            } else {
+                boolean horizontal = game.segment(i - 1) / cols == s / cols;
+                drawBody(c, x, y, cell, i, horizontal);
+            }
         }
-        // Eye on the head, offset forward and to the left of travel.
-        int h = game.segment(0);
-        int d = game.direction();
-        float fx = SnakeGame.DX[d], fy = SnakeGame.DY[d];
-        float cx = fieldX + (h % game.cols + 0.5f) * cell + fx * 0.15f * cell + fy * 0.2f * cell;
-        float cy = fieldY + (h / game.cols + 0.5f) * cell + fy * 0.15f * cell - fx * 0.2f * cell;
-        float e = Math.max(1, cell / 6);
-        c.drawRect(cx - e / 2, cy - e / 2, cx + e / 2, cy + e / 2, paper);
     }
 
-    /** Classic diamond-shaped food pellet occupying one cell. */
-    private void drawFood(Canvas c, int x, int y, int size) {
-        int sub = Math.max(1, (size - 2 * Math.max(1, size / 8)) / 3);
-        int ox = x + (size - 3 * sub) / 2, oy = y + (size - 3 * sub) / 2;
-        c.drawRect(ox + sub, oy, ox + 2 * sub, oy + sub, ink);
-        c.drawRect(ox, oy + sub, ox + sub, oy + 2 * sub, ink);
-        c.drawRect(ox + 2 * sub, oy + sub, ox + 3 * sub, oy + 2 * sub, ink);
-        c.drawRect(ox + sub, oy + 2 * sub, ox + 2 * sub, oy + 3 * sub, ink);
+    private void drawGlow(Canvas c, int x, int y, int size) {
+        if (theme.glow == 0) return;
+        int e = Math.max(1, size / 6);
+        fill.setColor(theme.glow);
+        c.drawRect(x - e, y - e, x + size + e, y + size + e, fill);
     }
 
-    private void drawSprite(Canvas c, String[] sprite, int x, int y, int px) {
-        for (int r = 0; r < sprite.length; r++) {
-            for (int col = 0; col < sprite[r].length(); col++) {
-                if (sprite[r].charAt(col) == '#') {
-                    c.drawRect(x + col * px, y + r * px, x + (col + 1) * px, y + (r + 1) * px, ink);
+    /** Body segment {@code index} (1 = just behind the head). */
+    private void drawBody(Canvas c, int x, int y, int size, int index, boolean horizontal) {
+        drawGlow(c, x, y, size);
+        int g = Math.max(1, size / 8);
+        if (theme.bodySprite != null) {
+            drawSprite(c, theme.bodySprite, x + g, y + g, size - 2 * g, size - 2 * g, horizontal ? 0 : 1, false);
+            return;
+        }
+        fill.setColor(theme.body[(index - 1) % theme.body.length]);
+        c.drawRect(x + g, y + g, x + size - g, y + size - g, fill);
+    }
+
+    private void drawHead(Canvas c, int x, int y, int size, int dir) {
+        drawGlow(c, x, y, size);
+        int g = Math.max(1, size / 8);
+        if (theme.headSprite != null) {
+            int rot = 0;
+            boolean mirror = false;
+            if (theme.rotateHead) rot = (dir - SnakeGame.RIGHT + 4) % 4;
+            else mirror = dir == SnakeGame.LEFT;
+            drawSprite(c, theme.headSprite, x + g, y + g, size - 2 * g, size - 2 * g, rot, mirror);
+            return;
+        }
+        fill.setColor(theme.head);
+        c.drawRect(x + g, y + g, x + size - g, y + size - g, fill);
+        // Eye, offset forward and to the left of travel.
+        float fx = SnakeGame.DX[dir], fy = SnakeGame.DY[dir];
+        float cx = x + 0.5f * size + fx * 0.15f * size + fy * 0.2f * size;
+        float cy = y + 0.5f * size + fy * 0.15f * size - fx * 0.2f * size;
+        float e = Math.max(1, size / 6);
+        fill.setColor(theme.eye);
+        c.drawRect(cx - e / 2, cy - e / 2, cx + e / 2, cy + e / 2, fill);
+    }
+
+    /**
+     * Draws a palette sprite as large as fits in the given box, centred.
+     *
+     * @param quarterTurns clockwise rotation in 90 degree steps
+     */
+    private void drawSprite(Canvas c, String[] rows, int left, int top, int boxW, int boxH,
+                            int quarterTurns, boolean mirror) {
+        int sw = 0;
+        for (String r : rows) sw = Math.max(sw, r.length());
+        int sh = rows.length;
+        boolean sideways = (quarterTurns & 1) == 1;
+        int dw = sideways ? sh : sw, dh = sideways ? sw : sh;
+        int px = Math.max(1, Math.min(boxW / dw, boxH / dh));
+        int ox = left + (boxW - dw * px) / 2, oy = top + (boxH - dh * px) / 2;
+        for (int r = 0; r < sh; r++) {
+            String row = rows[r];
+            for (int col = 0; col < row.length(); col++) {
+                char ch = row.charAt(col);
+                if (ch == '.') continue;
+                int sx = mirror ? sw - 1 - col : col;
+                int dx, dy;
+                switch (quarterTurns & 3) {
+                    case 1: dx = sh - 1 - r; dy = sx; break;
+                    case 2: dx = sw - 1 - sx; dy = sh - 1 - r; break;
+                    case 3: dx = r; dy = sw - 1 - sx; break;
+                    default: dx = sx; dy = r; break;
                 }
+                fill.setColor(theme.paletteColor(ch));
+                c.drawRect(ox + dx * px, oy + dy * px, ox + (dx + 1) * px, oy + (dy + 1) * px, fill);
             }
         }
     }
 
     private void drawDialog(Canvas c, String title, String line1, String line2) {
         int w = getWidth(), h = getHeight();
-        int boxW = w * 8 / 10;
+        int boxW = Math.min(w * 8 / 10, 110 * u);
         int titlePx = PixelFont.fit(title, boxW - 8 * u, 2 * u);
         int px = PixelFont.fit(line2.length() > line1.length() ? line2 : line1, boxW - 8 * u, u);
         int boxH = PixelFont.height(titlePx) + 2 * PixelFont.height(px) + 18 * u;
         tmp.set((w - boxW) / 2, (h - boxH) / 2, (w + boxW) / 2, (h + boxH) / 2);
-        c.drawRect(tmp, paper);
-        outline(c, tmp, frame);
+        fill.setColor(theme.panel);
+        c.drawRect(tmp, fill);
+        outline(c, tmp, frame, theme.frame);
         int y = tmp.top + 4 * u;
-        PixelFont.drawCentered(c, title, w / 2f, y, titlePx, ink);
+        textCentered(c, title, w / 2f, y, titlePx);
         y += PixelFont.height(titlePx) + 5 * u;
-        PixelFont.drawCentered(c, line1, w / 2f, y, px, ink);
+        textCentered(c, line1, w / 2f, y, px);
         y += PixelFont.height(px) + 3 * u;
-        PixelFont.drawCentered(c, line2, w / 2f, y, px, ink);
+        textCentered(c, line2, w / 2f, y, px);
     }
+
+    // ---- name entry
 
     private void drawNameEntry(Canvas c) {
         int w = getWidth(), h = getHeight();
-        int y = h / 8;
         int titlePx = PixelFont.fit("HIGH SCORE!", w * 8 / 10, 3 * u);
-        PixelFont.drawCentered(c, "NEW", w / 2f, y, titlePx, ink);
-        y += PixelFont.height(titlePx) + 2 * u;
-        PixelFont.drawCentered(c, "HIGH SCORE!", w / 2f, y, titlePx, ink);
-        y += PixelFont.height(titlePx) + 6 * u;
-        PixelFont.drawCentered(c, String.valueOf(game.score), w / 2f, y, 2 * u, ink);
-        y += PixelFont.height(2 * u) + 10 * u;
-
-        int lp = 5 * u;
-        int slot = 8 * lp;
-        int left = (w - 3 * slot) / 2;
+        int scorePx = 2 * u;
+        int lp = Math.min(4 * u, w / 30);
         int arrowPx = Math.max(1, lp / 2);
         int arrowH = PixelFont.height(arrowPx);
+        int hintPx = PixelFont.fit("SWIPE LEFT/RIGHT: MOVE", w * 9 / 10, u);
+        int bpx = 2 * u;
+        int bh = PixelFont.height(bpx) + 4 * bpx;
+        int lettersH = arrowH + 3 * u + PixelFont.height(lp) + 3 * u + arrowH;
+        int total = 2 * PixelFont.height(titlePx) + 2 * u + 6 * u + PixelFont.height(scorePx) + 8 * u
+                + lettersH + 6 * u + 2 * PixelFont.height(hintPx) + 2 * u + 6 * u + bh;
+        int y = Math.max(2 * u, (h - total) / 2);
+
+        textCentered(c, "NEW", w / 2f, y, titlePx);
+        y += PixelFont.height(titlePx) + 2 * u;
+        textCentered(c, "HIGH SCORE!", w / 2f, y, titlePx);
+        y += PixelFont.height(titlePx) + 6 * u;
+        textCentered(c, String.valueOf(game.score), w / 2f, y, scorePx);
+        y += PixelFont.height(scorePx) + 8 * u;
+
+        int slot = 8 * lp;
+        int left = (w - 3 * slot) / 2;
         for (int i = 0; i < 3; i++) {
             int sx = left + i * slot;
             Rect r = letterRects[i];
-            r.set(sx, y, sx + slot, y + arrowH + PixelFont.height(lp) + arrowH + 6 * u);
+            r.set(sx, y, sx + slot, y + lettersH);
             int ly = y + arrowH + 3 * u;
             String letter = String.valueOf(initials[i]);
-            PixelFont.drawCentered(c, letter, r.centerX(), ly, lp, ink);
+            textCentered(c, letter, r.centerX(), ly, lp);
             if (i == cursor) {
-                PixelFont.drawCentered(c, "^", r.centerX(), y, arrowPx, ink);
-                PixelFont.drawCentered(c, "v", r.centerX(), r.bottom - arrowH, arrowPx, ink);
+                textCentered(c, "^", r.centerX(), y, arrowPx);
+                textCentered(c, "v", r.centerX(), r.bottom - arrowH, arrowPx);
                 int bw = PixelFont.width(letter, lp);
+                fill.setColor(theme.ink);
                 c.drawRect(r.centerX() - bw / 2f, ly + PixelFont.height(lp) + u,
-                        r.centerX() + bw / 2f, ly + PixelFont.height(lp) + u + frame, ink);
+                        r.centerX() + bw / 2f, ly + PixelFont.height(lp) + u + frame, fill);
             }
         }
-        y = letterRects[0].bottom + 8 * u;
+        y += lettersH + 6 * u;
 
-        int px = PixelFont.fit("SWIPE LEFT/RIGHT: MOVE", w * 9 / 10, u);
-        PixelFont.drawCentered(c, "SWIPE UP/DOWN: LETTER", w / 2f, y, px, ink);
-        y += PixelFont.height(px) + 2 * u;
-        PixelFont.drawCentered(c, "SWIPE LEFT/RIGHT: MOVE", w / 2f, y, px, ink);
-        y += PixelFont.height(px) + 8 * u;
+        textCentered(c, "SWIPE UP/DOWN: LETTER", w / 2f, y, hintPx);
+        y += PixelFont.height(hintPx) + 2 * u;
+        textCentered(c, "SWIPE LEFT/RIGHT: MOVE", w / 2f, y, hintPx);
+        y += PixelFont.height(hintPx) + 6 * u;
 
-        int bpx = 2 * u;
-        int bw = w / 2, bh = PixelFont.height(bpx) + 4 * bpx;
+        int bw = Math.min(w / 2, 50 * u);
         saveRect.set((w - bw) / 2, y, (w + bw) / 2, y + bh);
         drawButton(c, saveRect, "SAVE", bpx, true);
     }
 
+    // ---- high scores
+
     private void drawScores(Canvas c) {
         int w = getWidth(), h = getHeight();
-        int y = h / 12;
         int titlePx = PixelFont.fit("HIGH SCORES", w * 8 / 10, 3 * u);
-        PixelFont.drawCentered(c, "HIGH SCORES", w / 2f, y, titlePx, ink);
-        y += PixelFont.height(titlePx) + 8 * u;
+        int bw = Math.min(w * 38 / 100, 45 * u);
+        int bpx = PixelFont.fit("CLEAR", bw - 6 * u, 2 * u);
+        int bh = PixelFont.height(bpx) + 4 * bpx;
+        int margin = 4 * u;
+        int titleH = PixelFont.height(titlePx) + 6 * u;
+        // Ten rows of 10 font pixels each must fit between the title and the buttons.
+        int rowsAvail = h - 2 * margin - titleH - bh - 6 * u;
+        int px = PixelFont.fit("10 AAA 00000 L9", w * 85 / 100, 2 * u);
+        px = Math.max(1, Math.min(px, rowsAvail / (HighScores.MAX * 10)));
+        int rowH = PixelFont.height(px) + 3 * px;
+        int total = titleH + HighScores.MAX * rowH + 6 * u + bh;
+        int y = Math.max(margin, (h - total) / 3);
+
+        textCentered(c, "HIGH SCORES", w / 2f, y, titlePx);
+        y += titleH;
 
         List<HighScores.Entry> list = scores.entries();
-        int px = PixelFont.fit("10 AAA 00000 L9", w * 85 / 100, 2 * u);
-        int rowH = PixelFont.height(px) + 3 * px;
         for (int i = 0; i < HighScores.MAX; i++) {
             String row;
             if (i < list.size()) {
@@ -689,18 +846,17 @@ public final class GameView extends View {
             int tw = PixelFont.width(row, px);
             int x = (w - tw) / 2;
             if (i == highlightRank) {
-                c.drawRect(x - 2 * px, y - px - px / 2, x + tw + 3 * px, y + PixelFont.height(px) + px + px / 2, ink);
-                PixelFont.draw(c, row, x, y, px, paper);
+                fill.setColor(theme.accent);
+                c.drawRect(x - 2 * px, y - px - px / 2, x + tw + 3 * px, y + PixelFont.height(px) + px + px / 2, fill);
+                fill.setColor(theme.accentText);
+                PixelFont.draw(c, row, x, y, px, fill);
             } else {
-                PixelFont.draw(c, row, x, y, px, ink);
+                text(c, row, x, y, px);
             }
             y += rowH;
         }
 
-        int bpx = PixelFont.fit("SURE?", w * 3 / 10, 2 * u);
-        int bh = PixelFont.height(bpx) + 4 * bpx;
-        int bw = w * 38 / 100;
-        int by = Math.max(y + 4 * u, h - bh - 8 * u);
+        int by = Math.max(y + 4 * u, Math.min(h - bh - margin, y + 12 * u));
         backRect.set(w / 2 - u - bw, by, w / 2 - u, by + bh);
         clearRect.set(w / 2 + u, by, w / 2 + u + bw, by + bh);
         drawButton(c, backRect, "BACK", bpx, true);
@@ -708,16 +864,24 @@ public final class GameView extends View {
     }
 
     private void drawButton(Canvas c, Rect r, String label, int px, boolean filled) {
-        if (filled) c.drawRect(r, ink);
-        else outline(c, r, frame);
         int ty = r.top + (r.height() - PixelFont.height(px)) / 2;
-        PixelFont.drawCentered(c, label, r.centerX(), ty, px, filled ? paper : ink);
+        if (filled) {
+            fill.setColor(theme.accent);
+            c.drawRect(r, fill);
+            plainCentered(c, label, r.centerX(), ty, px, theme.accentText);
+        } else {
+            fill.setColor(theme.panel);
+            c.drawRect(r, fill);
+            outline(c, r, frame, theme.frame);
+            textCentered(c, label, r.centerX(), ty, px);
+        }
     }
 
-    private void outline(Canvas c, Rect r, int t) {
-        c.drawRect(r.left, r.top, r.right, r.top + t, ink);
-        c.drawRect(r.left, r.bottom - t, r.right, r.bottom, ink);
-        c.drawRect(r.left, r.top, r.left + t, r.bottom, ink);
-        c.drawRect(r.right - t, r.top, r.right, r.bottom, ink);
+    private void outline(Canvas c, Rect r, int t, int color) {
+        fill.setColor(color);
+        c.drawRect(r.left, r.top, r.right, r.top + t, fill);
+        c.drawRect(r.left, r.bottom - t, r.right, r.bottom, fill);
+        c.drawRect(r.left, r.top, r.left + t, r.bottom, fill);
+        c.drawRect(r.right - t, r.top, r.right, r.bottom, fill);
     }
 }

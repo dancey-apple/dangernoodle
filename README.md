@@ -19,6 +19,8 @@ A Nokia-style Snake game for Android, controlled with swipes.
   top right). Eat it fast for more points.
 - **Walls ON**: hitting the border ends the game. **Walls OFF** (dashed border): edges wrap around.
 - Levels 1–9 set the speed.
+- **Themes** (tap the left/right side of the theme button on the menu): Classic, Synthwave,
+  Vaporwave, Candy, Spooky (a skelly snake that eats ghosts) and Sci-Fi.
 
 The top 10 scores are saved on the device. A qualifying score lets you enter three initials
 (swipe up/down to change a letter, left/right to move between letters).
