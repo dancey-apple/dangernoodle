@@ -8,7 +8,8 @@ package com.dangernoodle.snake;
  */
 final class Theme {
     static final int DECOR_NONE = 0, DECOR_SYNTHWAVE = 1, DECOR_VAPORWAVE = 2,
-            DECOR_CANDY = 3, DECOR_SPOOKY = 4, DECOR_SCIFI = 5;
+            DECOR_CANDY = 3, DECOR_SPOOKY = 4, DECOR_SCIFI = 5, DECOR_NEON = 6, DECOR_WESTERN = 7,
+            DECOR_DINOSAURS = 8, DECOR_CASTLES = 9, DECOR_PRINCESSES = 10, DECOR_UNICORNS = 11;
 
     final String name;
     int bgTop, bgBottom;
@@ -42,7 +43,10 @@ final class Theme {
         return palette[c - '1'];
     }
 
-    static final Theme[] ALL = {classic(), synthwave(), vaporwave(), candy(), spooky(), scifi()};
+    static final Theme[] ALL = {
+        classic(), synthwave(), vaporwave(), neon(), candy(), spooky(), scifi(),
+        western(), dinosaurs(), castles(), princesses(), unicorns(),
+    };
 
     private static Theme classic() {
         Theme t = new Theme("CLASSIC");
@@ -280,6 +284,311 @@ final class Theme {
             "335335335333",
             ".3333333333.",
             "...5....5...",
+        };
+        return t;
+    }
+
+    private static Theme neon() {
+        Theme t = new Theme("NEON");
+        t.bgTop = 0xFF0A0606;
+        t.bgBottom = 0xFF1C0E0E;
+        t.ink = 0xFF39FF14;
+        t.shadow = 0xFF0B5C05;
+        t.accent = 0xFFFF2079;
+        t.accentText = 0xFF0A0606;
+        t.panel = 0xFF120A0A;
+        t.frame = 0xFF00F0FF;
+        t.fieldTint = 0xB8080505;
+        t.body = new int[] {0xFFFF2079, 0xFFFFE700, 0xFF00F0FF, 0xFF39FF14, 0xFFB026FF};
+        t.head = 0xFFFFFFFF;
+        t.eye = 0xFF0A0606;
+        t.glow = 0x40FF2079;
+        t.decor = DECOR_NEON;
+        //            1 pink      2 yellow    3 cyan      4 green     5 purple    6 white
+        t.palette = new int[] {0xFFFF2079, 0xFFFFE700, 0xFF00F0FF, 0xFF39FF14, 0xFFB026FF, 0xFFFFFFFF};
+        // Neon star.
+        t.food = new String[] {
+            "...2...",
+            "..222..",
+            "2222222",
+            ".22622.",
+            "..222..",
+            ".22.22.",
+            "2.....2",
+        };
+        // Neon shades.
+        t.bonus = new String[] {
+            "11111111111",
+            "13331.13331",
+            "13331.13331",
+            ".111...111.",
+        };
+        return t;
+    }
+
+    private static Theme western() {
+        Theme t = new Theme("WESTERN");
+        t.bgTop = 0xFFF28C38;
+        t.bgBottom = 0xFFF7D08A;
+        t.ink = 0xFF4A2511;
+        t.accent = 0xFFA0401E;
+        t.accentText = 0xFFFFF1D6;
+        t.panel = 0xFFF9E4BC;
+        t.frame = 0xFF6B3E1F;
+        t.fieldTint = 0x99F9E4BC;
+        t.body = new int[] {0xFF8B5A2B};
+        t.head = 0xFF6B3E1F;
+        t.eye = 0xFFF2C14E;
+        t.decor = DECOR_WESTERN;
+        //            1 gold      2 dk gold   3 brown     4 tan       5 silver
+        t.palette = new int[] {0xFFF2C14E, 0xFFB8860B, 0xFF4A2511, 0xFFB07840, 0xFFC0C0C0};
+        // Rattlesnake diamonds.
+        t.bodySprite = new String[] {
+            "4444444",
+            "4443444",
+            "4433344",
+            "4333334",
+            "4433344",
+            "4443444",
+            "4444444",
+        };
+        // Gold coin.
+        t.food = new String[] {
+            "..111..",
+            ".11111.",
+            "1121211",
+            "1112111",
+            "1121211",
+            ".11111.",
+            "..111..",
+        };
+        // Sheriff's star.
+        t.bonus = new String[] {
+            "....1....",
+            "...111...",
+            "111111111",
+            ".1112111.",
+            "..11111..",
+            ".1111111.",
+            "111...111",
+        };
+        return t;
+    }
+
+    private static Theme dinosaurs() {
+        Theme t = new Theme("DINOSAURS");
+        t.bgTop = 0xFF9BD3E0;
+        t.bgBottom = 0xFFE8F3C8;
+        t.ink = 0xFF2D4A1E;
+        t.accent = 0xFFE07A1F;
+        t.accentText = 0xFFFFFFFF;
+        t.panel = 0xFFF4F9E4;
+        t.frame = 0xFF4F772D;
+        t.fieldTint = 0x99F4F9E4;
+        t.body = new int[] {0xFF5DAA3C};
+        t.head = 0xFF5DAA3C;
+        t.eye = 0xFF1B1B1B;
+        t.decor = DECOR_DINOSAURS;
+        //            1 green     2 dk green  3 white     4 egg       5 speckle   6 meat      7 bone      8 orange    9 black
+        t.palette = new int[] {0xFF5DAA3C, 0xFF2F6B1F, 0xFFFFFFFF, 0xFFD9C78F, 0xFF6B8A40,
+            0xFFA0522D, 0xFFF5F0E1, 0xFFE07A1F, 0xFF1B1B1B};
+        // T. rex head, jaws open.
+        t.rotateHead = false;
+        t.headSprite = new String[] {
+            ".1111..",
+            "111911.",
+            "1111111",
+            "11.3.3.",
+            "11.....",
+            "113.3..",
+            "11111..",
+        };
+        // Stegosaurus plates along the back.
+        t.bodySprite = new String[] {
+            ".8...8.",
+            "888.888",
+            "1111111",
+            "1111111",
+            "2121212",
+            "1111111",
+            "1111111",
+        };
+        // Speckled egg.
+        t.food = new String[] {
+            "..44..",
+            ".4454.",
+            "444444",
+            "454444",
+            "444454",
+            "444444",
+            ".4444.",
+        };
+        // Drumstick.
+        t.bonus = new String[] {
+            "..66666...",
+            ".6666666..",
+            ".66666666.",
+            "..6666667.",
+            "........77",
+            ".......777",
+        };
+        return t;
+    }
+
+    private static Theme castles() {
+        Theme t = new Theme("CASTLES");
+        t.bgTop = 0xFF87BDE8;
+        t.bgBottom = 0xFFDDEFFB;
+        t.ink = 0xFF2C3E50;
+        t.accent = 0xFF8E2C2C;
+        t.accentText = 0xFFF5E6C8;
+        t.panel = 0xFFF3ECDD;
+        t.frame = 0xFF5D6D7E;
+        t.fieldTint = 0x99F3ECDD;
+        t.body = new int[] {0xFF3B8B4A};
+        t.head = 0xFF3B8B4A;
+        t.eye = 0xFF000000;
+        t.decor = DECOR_CASTLES;
+        //            1 gold      2 dk gold   3 green     4 dk green  5 wood      6 red       7 white     8 black     9 fire
+        t.palette = new int[] {0xFFE0A800, 0xFFB8860B, 0xFF3B8B4A, 0xFF245C32, 0xFF7B4A26,
+            0xFFC0392B, 0xFFFFFFFF, 0xFF000000, 0xFFFF8C1A};
+        // A dragon guards the castle.
+        t.rotateHead = false;
+        t.headSprite = new String[] {
+            "4....4.",
+            "333333.",
+            "3383333",
+            "3333333",
+            "33...99",
+            "3333..9",
+            ".333...",
+        };
+        t.bodySprite = new String[] {
+            "4.4.4.4",
+            "3333333",
+            "3433343",
+            "3333333",
+            "3343334",
+            "3333333",
+            "1111111",
+        };
+        // Golden key.
+        t.food = new String[] {
+            ".11....",
+            "1..1111",
+            "1..1.1.",
+            ".11....",
+        };
+        // Treasure chest.
+        t.bonus = new String[] {
+            ".5555555.",
+            "555555555",
+            "222212222",
+            "555222555",
+            "555525555",
+            "555555555",
+            "222222222",
+        };
+        return t;
+    }
+
+    private static Theme princesses() {
+        Theme t = new Theme("PRINCESSES");
+        t.bgTop = 0xFFFDE2FF;
+        t.bgBottom = 0xFFFFD1E8;
+        t.ink = 0xFF6A2C91;
+        t.shadow = 0xFFFFFFFF;
+        t.accent = 0xFFC2378F;
+        t.accentText = 0xFFFFFFFF;
+        t.panel = 0xFFFFF4FB;
+        t.frame = 0xFFD4A017;
+        t.fieldTint = 0x99FFF4FB;
+        t.body = new int[] {0xFFF15BB5, 0xFF9B5DE5};
+        t.head = 0xFFF15BB5;
+        t.eye = 0xFF3A0CA3;
+        t.decor = DECOR_PRINCESSES;
+        //            1 purple    2 pink      3 gold      4 lt pink   5 eye       6 red       7 white
+        t.palette = new int[] {0xFF9B5DE5, 0xFFF15BB5, 0xFFFFD23F, 0xFFFFB3DE, 0xFF3A0CA3,
+            0xFFE63946, 0xFFFFFFFF};
+        // A crowned head.
+        t.rotateHead = false;
+        t.headSprite = new String[] {
+            ".3.3.3.",
+            ".33333.",
+            "2222222",
+            "2252252",
+            "2222222",
+            "2226222",
+            ".22222.",
+        };
+        // Pink jewel.
+        t.food = new String[] {
+            ".22222.",
+            "2272222",
+            "2222222",
+            ".22222.",
+            "..222..",
+            "...2...",
+        };
+        // Crown.
+        t.bonus = new String[] {
+            "3...3...3",
+            "33.333.33",
+            "333333333",
+            "323323323",
+            "333333333",
+            "333333333",
+        };
+        return t;
+    }
+
+    private static Theme unicorns() {
+        Theme t = new Theme("UNICORNS");
+        t.bgTop = 0xFFCDEBFF;
+        t.bgBottom = 0xFFFFE3F6;
+        t.ink = 0xFF6B4FA0;
+        t.shadow = 0xFFFFFFFF;
+        t.accent = 0xFFFF77C8;
+        t.accentText = 0xFFFFFFFF;
+        t.panel = 0xFFFFFFFF;
+        t.frame = 0xFF9AD0FF;
+        t.fieldTint = 0x80FFFFFF;
+        t.body = new int[] {0xFFFF6B6B, 0xFFFFB86B, 0xFFFFE66B, 0xFF7BE495, 0xFF6BC4FF, 0xFFB48CFF};
+        t.head = 0xFFFFFFFF;
+        t.eye = 0xFF3A2E5C;
+        t.decor = DECOR_UNICORNS;
+        //            1 white     2 gold      3 pink      4 blue      5 eye       6 purple    7 yellow    8 cherry
+        t.palette = new int[] {0xFFFFFFFF, 0xFFFFD23F, 0xFFFF77C8, 0xFF6BC4FF, 0xFF3A2E5C,
+            0xFFB48CFF, 0xFFFFE66B, 0xFFFF4D6D};
+        // Unicorn head with a golden horn and rainbow mane.
+        t.rotateHead = false;
+        t.headSprite = new String[] {
+            ".....2.",
+            "33..22.",
+            "341111.",
+            "3411511",
+            "3411111",
+            "34.1111",
+            "3...11.",
+        };
+        // Cupcake.
+        t.food = new String[] {
+            "...8...",
+            "..333..",
+            ".33333.",
+            "3333333",
+            "6666666",
+            ".66666.",
+            ".66666.",
+        };
+        // Rainbow.
+        t.bonus = new String[] {
+            "...333333...",
+            ".3377777733.",
+            "377444444773",
+            "374466664473",
+            "3746....6473",
+            "3746....6473",
         };
         return t;
     }

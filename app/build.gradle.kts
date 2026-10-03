@@ -10,8 +10,8 @@ android {
         applicationId = "com.dangernoodle.snake"
         minSdk = 26
         targetSdk = 34
-        versionCode = 2
-        versionName = "1.1"
+        versionCode = 3
+        versionName = "1.2"
     }
 
     // Same key as scripts/build-apk.sh so either build installs over the other.

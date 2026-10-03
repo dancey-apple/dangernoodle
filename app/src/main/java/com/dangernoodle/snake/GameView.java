@@ -523,7 +523,7 @@ public final class GameView extends View {
             "< LEVEL " + level + " >",
             "WALLS " + (walls ? "ON" : "OFF"),
             "SOUND " + (soundOn ? "ON" : "OFF"),
-            "< " + theme.name + " >",
+            theme.name,
             "HIGH SCORES",
         };
 
@@ -537,14 +537,17 @@ public final class GameView extends View {
 
         // Buttons get whatever height is left, up to 2u per font pixel.
         int boxW = Math.min(w * 8 / 10, 110 * u);
-        String widest = "< " + "VAPORWAVE" + " >";
-        int px = PixelFont.fit(widest, boxW - 4 * u, 2 * u);
+        String longestName = "";
+        for (Theme t : Theme.ALL) if (t.name.length() > longestName.length()) longestName = t.name;
+        int px = PixelFont.fit("< " + longestName + " >", boxW - 4 * u, 2 * u);
         int availForItems = h - 2 * margin - headerH - footerH - 8 * u;
-        // Each item is 10 px tall plus a 1.5 px gap.
-        px = Math.max(1, Math.min(px, availForItems * 2 / (MENU_ITEMS * 23 - 3)));
+        // Items are 10 px tall (the two-line theme item 16) with 1.5 px gaps.
+        int units2 = (MENU_ITEMS - 1) * 20 + 32 + (MENU_ITEMS - 1) * 3;
+        px = Math.max(1, Math.min(px, availForItems * 2 / units2));
         int boxH = 10 * px;
+        int themeH = 16 * px;
         int gap = 3 * px / 2;
-        int itemsH = MENU_ITEMS * boxH + (MENU_ITEMS - 1) * gap;
+        int itemsH = (MENU_ITEMS - 1) * boxH + themeH + (MENU_ITEMS - 1) * gap;
 
         int free = Math.max(0, h - 2 * margin - headerH - itemsH - footerH);
         int y = margin + free / 4;
@@ -560,14 +563,29 @@ public final class GameView extends View {
 
         for (int i = 0; i < MENU_ITEMS; i++) {
             Rect r = menuRects[i];
-            r.set((w - boxW) / 2, y, (w + boxW) / 2, y + boxH);
-            drawButton(c, r, labels[i], px, i == M_PLAY);
-            y += boxH + gap;
+            int bh = i == M_THEME ? themeH : boxH;
+            r.set((w - boxW) / 2, y, (w + boxW) / 2, y + bh);
+            if (i == M_THEME) drawThemeButton(c, r, px);
+            else drawButton(c, r, labels[i], px, i == M_PLAY);
+            y += bh + gap;
         }
 
         int fy = h - margin - footerH;
         textCentered(c, "SWIPE TO STEER", w / 2f, fy, u);
         textCentered(c, "TAP TO PAUSE", w / 2f, fy + PixelFont.height(u) + 2 * u, u);
+    }
+
+    /** Two-line button: a small "THEME" caption over the theme name, with arrows at the edges. */
+    private void drawThemeButton(Canvas c, Rect r, int px) {
+        fill.setColor(theme.panel);
+        c.drawRect(r, fill);
+        outline(c, r, frame, theme.frame);
+        int capPx = Math.max(1, px * 3 / 5);
+        textCentered(c, "THEME", r.centerX(), r.top + 2 * px, capPx);
+        int ny = r.bottom - 2 * px - PixelFont.height(px);
+        textCentered(c, theme.name, r.centerX(), ny, px);
+        text(c, "<", r.left + 2 * px, ny, px);
+        text(c, ">", r.right - 2 * px - PixelFont.width(">", px), ny, px);
     }
 
     /** A little wavy snake chasing a food pellet, centred on cx, drawn in the current theme. */
